@@ -3,12 +3,10 @@ package azure
 import (
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
-	"os"
 
+	"github.com/hashicorp/terraform/helper/pathorcontents"
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/hashicorp/terraform/terraform"
-	"github.com/mitchellh/go-homedir"
 )
 
 // Provider returns a terraform.ResourceProvider.
@@ -93,36 +91,25 @@ func validateSettingsFile(v interface{}, k string) ([]string, []error) {
 }
 
 const settingsPathWarnMsg = `
-settings_file is not valid XML, so we are assuming it is a file path. This
-support will be removed in the future. Please update your configuration to use
-${file("filename.publishsettings")} instead.`
+settings_file was provided as a file path. This support
+will be removed in the future. Please update your configuration
+to use ${file("filename.publishsettings")} instead.`
 
 func readSettings(pathOrContents string) (s []byte, ws []string, es []error) {
+	contents, wasPath, err := pathorcontents.Read(pathOrContents)
+	if err != nil {
+		es = append(es, fmt.Errorf("error reading settings_file: %s", err))
+	}
+	if wasPath {
+		ws = append(ws, settingsPathWarnMsg)
+	}
+
 	var settings settingsData
-	if err := xml.Unmarshal([]byte(pathOrContents), &settings); err == nil {
-		s = []byte(pathOrContents)
-		return
+	if err := xml.Unmarshal([]byte(contents), &settings); err != nil {
+		es = append(es, fmt.Errorf("error parsing settings_file as XML: %s", err))
 	}
 
-	ws = append(ws, settingsPathWarnMsg)
-	path, err := homedir.Expand(pathOrContents)
-	if err != nil {
-		es = append(es, fmt.Errorf("Error expanding path: %s", err))
-		return
-	}
-
-	s, err = ioutil.ReadFile(path)
-	if err != nil {
-		es = append(es, fmt.Errorf("Could not read file '%s': %s", path, err))
-	}
 	return
-}
-
-func isFile(v string) (bool, error) {
-	if _, err := os.Stat(v); err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 // settingsData is a private struct used to test the unmarshalling of the

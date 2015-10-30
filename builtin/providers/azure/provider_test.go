@@ -78,6 +78,11 @@ func TestAzure_validateSettingsFile(t *testing.T) {
 		t.Fatalf("Error creating temporary file with XML in TestAzure_validateSettingsFile: %s", err)
 	}
 	defer os.Remove(fx.Name())
+	_, err = io.WriteString(fx, "<PublishData></PublishData>")
+	if err != nil {
+		t.Fatalf("Error writing XML File: %s", err)
+	}
+	fx.Close()
 
 	home, err := homedir.Dir()
 	if err != nil {
@@ -88,12 +93,11 @@ func TestAzure_validateSettingsFile(t *testing.T) {
 		t.Fatalf("Error creating homedir-based temporary file: %s", err)
 	}
 	defer os.Remove(fh.Name())
-
-	_, err = io.WriteString(fx, "<PublishData></PublishData>")
+	_, err = io.WriteString(fh, "<PublishData></PublishData>")
 	if err != nil {
 		t.Fatalf("Error writing XML File: %s", err)
 	}
-	fx.Close()
+	fh.Close()
 
 	r := strings.NewReplacer(home, "~")
 	homePath := r.Replace(fh.Name())
@@ -103,8 +107,8 @@ func TestAzure_validateSettingsFile(t *testing.T) {
 		W     int    // expected count of warnings
 		E     int    // expected count of errors
 	}{
-		{"test", 1, 1},
-		{f.Name(), 1, 0},
+		{"test", 0, 1},
+		{f.Name(), 1, 1},
 		{fx.Name(), 1, 0},
 		{homePath, 1, 0},
 		{"<PublishData></PublishData>", 0, 0},
@@ -114,10 +118,10 @@ func TestAzure_validateSettingsFile(t *testing.T) {
 		w, e := validateSettingsFile(tc.Input, "")
 
 		if len(w) != tc.W {
-			t.Errorf("Error in TestAzureValidateSettingsFile: input: %s , warnings: %#v, errors: %#v", tc.Input, w, e)
+			t.Errorf("Error in TestAzureValidateSettingsFile: input: %s , warnings: %v, errors: %v", tc.Input, w, e)
 		}
 		if len(e) != tc.E {
-			t.Errorf("Error in TestAzureValidateSettingsFile: input: %s , warnings: %#v, errors: %#v", tc.Input, w, e)
+			t.Errorf("Error in TestAzureValidateSettingsFile: input: %s , warnings: %v, errors: %v", tc.Input, w, e)
 		}
 	}
 }
@@ -165,32 +169,6 @@ func TestAzure_providerConfigure(t *testing.T) {
 		meta := rp.(*schema.Provider).Meta()
 		if (meta == nil) != tc.NilMeta {
 			t.Fatalf("expected NilMeta: %t, got meta: %#v", tc.NilMeta, meta)
-		}
-	}
-}
-
-func TestAzure_isFile(t *testing.T) {
-	f, err := ioutil.TempFile("", "tf-test-file")
-	if err != nil {
-		t.Fatalf("Error creating temporary file with XML in TestAzure_isFile: %s", err)
-	}
-	cases := []struct {
-		Input string // String path to file
-		B     bool   // expected true/false
-		E     bool   // expect error
-	}{
-		{"test", false, true},
-		{f.Name(), true, false},
-	}
-
-	for _, tc := range cases {
-		x, y := isFile(tc.Input)
-		if tc.B != x {
-			t.Errorf("Error in TestAzure_isFile: input: %s , returned: %#v, expected: %#v", tc.Input, x, tc.B)
-		}
-
-		if tc.E != (y != nil) {
-			t.Errorf("Error in TestAzure_isFile: input: %s , returned: %#v, expected: %#v", tc.Input, y, tc.E)
 		}
 	}
 }

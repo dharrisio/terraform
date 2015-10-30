@@ -3,14 +3,13 @@ package ssh
 import (
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"time"
 
+	"github.com/hashicorp/terraform/helper/pathorcontents"
 	"github.com/hashicorp/terraform/terraform"
-	"github.com/mitchellh/go-homedir"
 	"github.com/mitchellh/mapstructure"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -201,31 +200,27 @@ func buildSSHClientConfig(opts sshClientConfigOpts) (*ssh.ClientConfig, error) {
 	return conf, nil
 }
 
-func readPublicKeyFromPath(path string) (ssh.AuthMethod, error) {
-	fullPath, err := homedir.Expand(path)
+func readPublicKeyFromPath(poc string) (ssh.AuthMethod, error) {
+	key, _, err := pathorcontents.Read(poc)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to expand home directory: %s", err)
-	}
-	key, err := ioutil.ReadFile(fullPath)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to read key file %q: %s", path, err)
+		return nil, fmt.Errorf("Failed to read key file %q: %s", poc, err)
 	}
 
 	// We parse the private key on our own first so that we can
 	// show a nicer error if the private key has a password.
-	block, _ := pem.Decode(key)
+	block, _ := pem.Decode([]byte(key))
 	if block == nil {
-		return nil, fmt.Errorf("Failed to read key %q: no key found", path)
+		return nil, fmt.Errorf("Failed to read key %q: no key found", poc)
 	}
 	if block.Headers["Proc-Type"] == "4,ENCRYPTED" {
 		return nil, fmt.Errorf(
 			"Failed to read key %q: password protected keys are\n"+
-				"not supported. Please decrypt the key prior to use.", path)
+				"not supported. Please decrypt the key prior to use.", poc)
 	}
 
-	signer, err := ssh.ParsePrivateKey(key)
+	signer, err := ssh.ParsePrivateKey([]byte(key))
 	if err != nil {
-		return nil, fmt.Errorf("Failed to parse key file %q: %s", path, err)
+		return nil, fmt.Errorf("Failed to parse key file %q: %s", poc, err)
 	}
 
 	return ssh.PublicKeys(signer), nil
