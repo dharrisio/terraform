@@ -425,9 +425,7 @@ func optionSettingValueHash(v interface{}) int {
 	optionName := rd["name"].(string)
 	value, _ := rd["value"].(string)
 	hk := fmt.Sprintf("%s:%s=%s", namespace, optionName, sortValues(value))
-	if optionName == "Subnets" {
-		log.Printf("[DEBUG] Elastic Beanstalk optionSettingValueHash(%#v): hk=%s,hc=%d", v, hk, hashcode.String(hk))
-	}
+	log.Printf("[DEBUG] Elastic Beanstalk optionSettingValueHash(%#v): optionName-(%s): hk=%s,hc=%d", v, optionName, hk, hashcode.String(hk))
 	return hashcode.String(hk)
 }
 
@@ -436,7 +434,9 @@ func optionSettingKeyHash(v interface{}) int {
 	namespace := rd["namespace"].(string)
 	optionName := rd["name"].(string)
 	value, _ := rd["value"].(string)
-	return hashcode.String(fmt.Sprintf("%s:%s=%s", namespace, optionName, sortValues(value)))
+	hk := fmt.Sprintf("%s:%s=%s", namespace, optionName, sortValues(value))
+	log.Printf("[DEBUG] Elastic Beanstalk optionSettingKeyHash(%#v): optionName-(%s): hk=%s,hc%d", v, optionName, hk, hashcode.String(hk))
+	return hashcode.String(hk)
 }
 
 func sortValues(v string) string {
