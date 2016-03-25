@@ -131,41 +131,6 @@ func resourceAwsElasticBeanstalkApplicationVersionUpdate(d *schema.ResourceData,
 
 }
 
-func resourceAwsElasticBeanstalkApplicationVersionDelete(d *schema.ResourceData, meta interface{}) error {
-	conn := meta.(*AWSClient).elasticbeanstalkconn
-
-	application := d.Get("application").(string)
-	name := d.Id()
-	retentionNumber := d.Get("retention_number").(int)
-	retentionPeriod := d.Get("retention_period").(int)
-
-	if retentionNumber == 0 && retentionPeriod == 0 {
-		err := deleteApplicationVersion(conn, application, name)
-
-		if err != nil {
-			return err
-		}
-	} else {
-		versions, err := conn.DescribeApplicationVersions(&elasticbeanstalk.DescribeApplicationVersionsInput{
-			ApplicationName: aws.String(application),
-		})
-
-		if err != nil {
-			return err
-		}
-
-		for _, v := range applicationVersions(versions.ApplicationVersions, retentionNumber, retentionPeriod) {
-			err = deleteApplicationVersion(conn, application, *v)
-
-			if err != nil {
-				return err
-			}
-		}
-	}
-	d.SetId("")
-	return nil
-}
-
 func resourceAwsElasticBeanstalkApplicationVersionDescriptionUpdate(conn *elasticbeanstalk.ElasticBeanstalk, d *schema.ResourceData) error {
 	application := d.Get("application").(string)
 	description := d.Get("description").(string)
@@ -182,7 +147,41 @@ func resourceAwsElasticBeanstalkApplicationVersionDescriptionUpdate(conn *elasti
 	return err
 }
 
+func resourceAwsElasticBeanstalkApplicationVersionDelete(d *schema.ResourceData, meta interface{}) error {
+	conn := meta.(*AWSClient).elasticbeanstalkconn
+
+	application := d.Get("application").(string)
+	name := d.Id()
+	retentionNumber := d.Get("retention_number").(int)
+	retentionPeriod := d.Get("retention_period").(int)
+
+	if retentionNumber == 0 {
+		log.Printf("[DEBUG] retentionNumber and retentionPeriod not set. Deleteting %s", name)
+		if err := deleteApplicationVersion(conn, application, name); err != nil {
+			return err
+		}
+	} else {
+		log.Printf("[DEBUG] retentionNumber: %d retentionPeriod: %d", retentionNumber, retentionPeriod)
+		versions, err := conn.DescribeApplicationVersions(&elasticbeanstalk.DescribeApplicationVersionsInput{
+			ApplicationName: aws.String(application),
+		})
+
+		if err != nil {
+			return err
+		}
+
+		for _, v := range applicationVersions(versions.ApplicationVersions, retentionNumber, retentionPeriod) {
+			if err = deleteApplicationVersion(conn, application, *v); err != nil {
+				return err
+			}
+		}
+	}
+	d.SetId("")
+	return nil
+}
+
 func deleteApplicationVersion(conn *elasticbeanstalk.ElasticBeanstalk, application string, v string) error {
+	log.Printf("[DEBUG] Deleting Application Version: %s", v)
 	_, err := conn.DeleteApplicationVersion(&elasticbeanstalk.DeleteApplicationVersionInput{
 		ApplicationName: aws.String(application),
 		VersionLabel:    aws.String(v),
@@ -205,22 +204,34 @@ func applicationVersions(versions []*elasticbeanstalk.ApplicationVersionDescript
 	retentionPeriodHours := time.Duration(retentionPeriod) * time.Hour
 
 	versionSlice := applicationVersionDescriptionSlice(versions)
+	log.Printf("[DEBUG] Pre-Sorted Elastic Beanstalk Application Versions %v", &versionSlice)
 	sort.Sort(versionSlice)
+	log.Printf("[DEBUG] Sorted Elastic Beanstalk Application Versions %v", &versionSlice)
 
 	if retentionNumber != 0 {
-		versionSlice = versionSlice[:retentionNumber]
+		// When the number of application versions is less than retention number, don't delete anything.
+		if len(versionSlice) <= retentionNumber {
+			return nil
+		}
+		versionSlice = versionSlice[retentionNumber:]
 	}
 
-	if retentionPeriod != 0 {
-		for _, v := range versionSlice {
+	for _, v := range versionSlice {
+		if retentionPeriod != 0 {
 			if time.Since(*v.DateCreated) > retentionPeriodHours {
 				versionsToDelete = append(versionsToDelete, v.VersionLabel)
 			}
+		} else {
+			versionsToDelete = append(versionsToDelete, v.VersionLabel)
 		}
 	}
+
+	log.Printf("[DEBUG] Elastic Beanstalk Application Versions to delete %v", &versionsToDelete)
 	return versionsToDelete
 }
 
+// To make sure the application versions are always sorted we implement the sort interface
+// for our local ApplicationVersionDescription slice type. Sort order is most recent to oldest.
 type applicationVersionDescriptionSlice []*elasticbeanstalk.ApplicationVersionDescription
 
 func (slice applicationVersionDescriptionSlice) Len() int {
@@ -228,7 +239,7 @@ func (slice applicationVersionDescriptionSlice) Len() int {
 }
 
 func (slice applicationVersionDescriptionSlice) Less(i, j int) bool {
-	return slice[i].DateCreated.Before(*slice[j].DateCreated)
+	return slice[i].DateCreated.After(*slice[j].DateCreated)
 }
 
 func (slice applicationVersionDescriptionSlice) Swap(i, j int) {
