@@ -259,7 +259,7 @@ func resourceAwsElasticBeanstalkEnvironmentCreate(d *schema.ResourceData, meta i
 			d.Id(), err)
 	}
 
-	err = describeBeanstalkEvents(conn, d.Id(), t)
+	err = describeBeanstalkErrors(conn, d.Id(), t)
 	if err != nil {
 		return err
 	}
@@ -331,7 +331,7 @@ func resourceAwsElasticBeanstalkEnvironmentUpdate(d *schema.ResourceData, meta i
 			d.Id(), err)
 	}
 
-	err = describeBeanstalkEvents(conn, d.Id(), t)
+	err = describeBeanstalkErrors(conn, d.Id(), t)
 	if err != nil {
 		return err
 	}
@@ -577,7 +577,7 @@ func resourceAwsElasticBeanstalkEnvironmentDelete(d *schema.ResourceData, meta i
 			d.Id(), err)
 	}
 
-	err = describeBeanstalkEvents(conn, d.Id(), t)
+	err = describeBeanstalkErrors(conn, d.Id(), t)
 	if err != nil {
 		return err
 	}
@@ -702,7 +702,7 @@ func dropGeneratedSecurityGroup(settingValue string, meta interface{}) string {
 	return strings.Join(legitGroups, ",")
 }
 
-func describeBeanstalkEvents(conn *elasticbeanstalk.ElasticBeanstalk, environmentId string, t time.Time) error {
+func describeBeanstalkErrors(conn *elasticbeanstalk.ElasticBeanstalk, environmentId string, t time.Time) error {
 	beanstalkErrors, err := conn.DescribeEvents(&elasticbeanstalk.DescribeEventsInput{
 		EnvironmentId: aws.String(environmentId),
 		Severity:      aws.String("ERROR"),
