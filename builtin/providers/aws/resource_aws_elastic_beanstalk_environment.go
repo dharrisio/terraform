@@ -702,7 +702,7 @@ func dropGeneratedSecurityGroup(settingValue string, meta interface{}) string {
 	return strings.Join(legitGroups, ",")
 }
 
-func describeBeanstalkErrors(conn *elasticbeanstalk.ElasticBeanstalk, environmentId string, t time.Time) error {
+func describeBeanstalkErrors(conn *elasticbeanstalk.ElasticBeanstalk, environmentId string, t time.Time) []error {
 	beanstalkErrors, err := conn.DescribeEvents(&elasticbeanstalk.DescribeEventsInput{
 		EnvironmentId: aws.String(environmentId),
 		Severity:      aws.String("ERROR"),
@@ -713,13 +713,13 @@ func describeBeanstalkErrors(conn *elasticbeanstalk.ElasticBeanstalk, environmen
 		log.Printf("[Err] Unable to get Elastic Beanstalk Evironment events: %s", err)
 	}
 
-	events := ""
+	var events []error
 	for _, event := range beanstalkErrors.Events {
-		events = events + "\n" + event.EventDate.String() + ": " + *event.Message
+		events = append(events, fmt.Errorf(event.EventDate.String()+": "+*event.Message))
 	}
 
-	if events != "" {
-		return fmt.Errorf("%s", events)
+	if len(events) > 0 {
+		return events
 	}
 
 	return nil
